@@ -3,7 +3,7 @@ Links
 =====
 
   * [ruby-debug](http://bashdb.sourceforge.net/ruby-debug.html)
-  * [ruby-debug-ide](https://github.com/JetBrains/ruby-debug-ide)
+  * [ruby-debug-ide](https://github.com/ruby-debug/ruby-debug-ide)
   * [ruby-debug-ide Protocol Specification](http://debug-commons.rubyforge.org/protocol-spec.html)
   * [rebug Debugging-Oddities](http://bashdb.sourceforge.net/ruby-debug.html#Debugging-Oddities)
 

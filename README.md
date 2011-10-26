@@ -15,7 +15,7 @@ This project includes:
 
 NOTE: The *ruby-debug-ide* protocol specification as documented [here](http://debug-commons.rubyforge.org/protocol-spec.html)
 is not complete. More [commands](http://bashdb.sourceforge.net/ruby-debug.html) are available. Missing commands
-may be implemented [here](https://github.com/JetBrains/ruby-debug-ide).
+may be implemented [here](https://github.com/ruby-debug/ruby-debug-ide).
 
 
 Usage
@@ -29,10 +29,21 @@ Requirements
   * `gem install ruby-debug` >= 0.4.16
   * `gem install ruby-debug-ide` >= 0.10.4
 
+Installing custom `ruby-debug-ide` (optional):
+
+    gem install test-unit
+    gem install ruby-debug-base
+    gem install ruby-debug-base19x
+    git clone git://github.com/cadorn/ruby-debug-ide.git
+    cd ruby-debug-ide
+    bundle update
+    bundle exec rake build
+    gem install pkg/ruby-debug-ide-0.4.17.beta8.gem
+
 Install
 -------
 
-    npm install connect socket.io socket.io-client cli q xml2js
+    npm install -g connect socket.io socket.io-client cli q xml2js
     git clone git://github.com/ajaxorg/lib-rubydebug.git
     cd lib-rubydebug
     git checkout dev

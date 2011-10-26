@@ -3,6 +3,7 @@ TODO
 ====
 
   * Test with Ruby 1.9
+  * Tests that push timeouts and ensure proper recovery.
 
 
 Testing
