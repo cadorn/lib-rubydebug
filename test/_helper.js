@@ -56,19 +56,19 @@ var CLI = require("cli"),
     HTTP = require("http"),
     PATH = require("path"),
     EXEC = require("child_process").exec,
+    SPAWN = require("child_process").spawn,
     SYS = require("sys"),
     UTIL = require('util'),
     ASSERT = require("assert"),
     SOCKET_IO_CLIENT = require("socket.io-client"),
     XML2JS = require("xml2js"),
     NET = require("net"),
-    TIMERS = require("timers"),
-	EXEC = require("child_process").exec;
+    TIMERS = require("timers");
 
 
 var serverInfo = {},
-    ourServer = false,  // if we started the debug proxy server
-    verboseServerLog = false;
+	serverChildInstance = null,
+    ourServer = false;  // if we started the debug proxy server
 
 
 exports.getTestTimeout = function(extra)
@@ -110,23 +110,98 @@ exports.getClientOptions = function()
 
 exports.debugScript = function(name, sessionName, proxyPort)
 {
-	// Debug a ruby script using `rdebug-ide` (https://github.com/JetBrains/ruby-debug-ide)
+	var sessionID = null;
+	var shouldSendOutput = {
+			"stdout": true,
+			"stderr": true
+		};
+
+	function sendOutput(type, data)
+	{
+		if (!shouldSendOutput[type])
+			return;
+
+		// TODO: Buffer output?
+
+        // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
+		var req = HTTP.request({
+			  host: "localhost",
+			  port: proxyPort || serverInfo.port,
+			  path: "/debug-script-output?sessionID=" + sessionID + "&type=" + type,
+			  method: "POST"
+		}, function(res)
+		{
+			res.on("data", function(chunk)
+			{
+				// If server responds with "0" then output should not be sent for this session
+				if ((""+chunk) === "0")
+				{
+					shouldSendOutput[type] = false;
+				}
+			});
+		});
+		req.on('error', function(e) {
+		    console.error("Error '" + e.message + "' posting to: " + "http://localhost:" + (proxyPort || serverInfo.port) + "/debug-script-output?...");
+		});
+		req.write(data);
+		req.end();
+	}
+
+	// Debug a ruby script using `rdebug-ide` (https://github.com/ruby-debug/ruby-debug-ide)
 	// Once `rdebug-ide` is initialized we need to connect to it.
 	// NOTE: A free (unused) port should be selected here in order to run multiple debug sessions in parallel.
 	//		 We use a static port here as all our tests are executed sequentially.
 	var port = DEBUG_PORT;
 
-	var child = EXEC([
-	    // NOTE: Must start with `--stop`!
-	    "rdebug-ide --stop --port " + port + " -- " + PATH.dirname(PATH.dirname(module.id)) + "/ruby/scripts/" + name + ".rb"
-    ].join(" "), function (error, stdout, stderr) {
-//		console.log("[debugScript][stdout] " + stdout);
-		if (stderr)
-			console.log("[debugScript][stderr] " + stderr);
+	var child = SPAWN("rdebug-ide", [
+	    "--stop",	// NOTE: Must start with `--stop`!
+	    "--port", port,
+	    "--",
+	    PATH.dirname(PATH.dirname(module.id)) + "/ruby/scripts/" + name + ".rb"
+    ]);
+
+	child.stdout.on("data", function(data)
+	{
+		sendOutput("stdout", data);
+		if (serverInfo.verbose)
+		    console.log("[debugScript][stdout] " + data);
 	});
-	
+
+	child.stderr.on("data", function(data)
+	{
+		// Ignore debugger signature
+		if (/^\s*Fast Debugger \(ruby-debug-ide/.test(data))
+			return;
+		sendOutput("stderr", data);
+		if (serverInfo.verbose)
+			console.log("[debugScript][stderr] " + data);
+	});
+
+	child.on("exit", function (code)
+	{
+		child = null;
+		
+		// Notify proxy server that debug session has ended
+		// @issue https://github.com/ruby-debug/ruby-debug-ide/issues/8 (need session end notification event to get rid of this)
+        // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (also need output events to get rid of this)
+		var req = HTTP.request({
+			  host: "localhost",
+			  port: proxyPort || serverInfo.port,
+			  path: "/debug-script-end?sessionID=" + sessionID,
+			  method: "POST"
+		}, function(res)
+		{
+			// we assume event was sent
+		});
+		req.on('error', function(e) {
+		    console.error("Error '" + e.message + "' posting to: " + "http://localhost:" + (proxyPort || serverInfo.port) + "/debug-script-end?...");
+		});
+		req.end();		
+	});
+
 	function killSession()
 	{
+		if (child===null) return;
 		console.log("[debugScript] Kill session '" + sessionName + "' due to non-connection by proxy server!");
 		child.kill();
 	}
@@ -137,20 +212,21 @@ exports.debugScript = function(name, sessionName, proxyPort)
 	var req = HTTP.request({
 		  host: "localhost",
 		  port: proxyPort || serverInfo.port,
-		  path: "/debug-script?port=" + port + "&session=" + sessionName,
+		  path: "/debug-script-start?port=" + port + "&sessionName=" + sessionName,
 		  method: "POST"		
 	}, function(res)
 	{
 		res.on("data", function(chunk)
 		{
-			if ((""+chunk) == "OK")
+			if ((""+chunk) == "FAIL")
 			{
-				// proxy server has connected
-				connected = true;
+				// proxy server failed to connect
 			}
 			else
 			{
-				// proxy server failed to connect
+				// proxy server has connected
+				connected = true;
+				sessionID = ""+chunk;
 			}
 		});
 	});
@@ -171,6 +247,7 @@ exports.ready = function(callback)
 {
     // See: https://github.com/chriso/cli/blob/master/examples/static.js
     CLI.parse({
+        verbose:  ["v", 'Log major events to console', 'boolean', false],
         port:  [false, 'Listen on this port', 'number', PROXY_PORT],
         'skip-browser-tests': [false, 'Skip browser tests?', 'boolean', false]
     });
@@ -189,6 +266,11 @@ exports.ready = function(callback)
             });
         });
     });
+}
+
+exports.done = function(callback)
+{
+	stopServer(callback);
 }
 
 exports.fatalExit = function fatalExit(message)
@@ -237,6 +319,20 @@ function testConnection()
     return result.promise;
 }
 
+function stopServer(callback)
+{
+    if (serverChildInstance===null)
+    {
+        callback();
+        return;
+    }
+    serverChildInstance.on("exit", function()
+    {
+    	callback();
+    });
+	serverChildInstance.kill();
+}
+
 function startServer()
 {
     var result = Q.defer();
@@ -247,11 +343,9 @@ function startServer()
     
     console.log("Starting proxy server: " + command);
 
-    EXEC(command, function (error, stdout, stderr)
+    serverChildInstance = EXEC(command, function (error, stdout, stderr)
     {
-        // Ignore (server has stopped after stopServer() was called)
-        // NOTE: The following will only print if there was an error and the server stopped prematurely
-        if (verboseServerLog)
+        if (serverInfo.verbose)
             console.error("[proxyServer] " + stdout.split("\n").join("\n[proxyServer] ") + "\n");
     });
     
@@ -284,10 +378,18 @@ function startServer()
     }
 
     // Ping server for as long as the test script runs
+    var pingIntervalID = null;
     Q.when(result.promise, function()
     {
     	ping();
-        setInterval(ping, 300);
+    	pingIntervalID = setInterval(ping, 300);
+    });
+
+    serverChildInstance.on("exit", function()
+    {
+		if (pingIntervalID!==null)
+			clearInterval(pingIntervalID);
+    	serverChildInstance = null;
     });
 
     return result.promise;

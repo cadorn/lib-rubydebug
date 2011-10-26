@@ -43,5 +43,11 @@ HELPER.ready(function()
     ASYNC.concat(
         require("./connection"),
         require("./session")
-    ).exec()
+    ).run().report().summary(function(err, passed)
+    {
+    	HELPER.done(function()
+    	{
+    		process.exit(!err && passed ? 0 : 1);
+    	});
+    });
 });

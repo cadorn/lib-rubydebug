@@ -112,7 +112,7 @@ function startServer(options)
 
             // Called by `../test/_helper.js` to notify us that a new `rdebug-ide` instance
             // is ready to be connected to.
-            "/debug-script": function(req, res)
+            "/debug-script-start": function(req, res)
             {
             	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
 
@@ -127,17 +127,17 @@ function startServer(options)
     		        connectTimeout: 2000,
     		        debugHost: "localhost",
     		        debugPort: qs.port,
-    		        sessionName: qs.session
+    		        sessionName: qs.sessionName
     		    });
             	
             	var connected = false;
-            	
+
             	client.on("session", function(session)
             	{
-            		if(session.name === qs.session)
+            		if(session.name === qs.sessionName)
             		{
 	            		connected = true;
-	                    res.end("OK");
+	                    res.end(session.id);
             		}
             	});
 
@@ -150,7 +150,49 @@ function startServer(options)
                 		res.end("FAIL");
                 }, 3250);
             },
-            
+
+            // Called by `../test/_helper.js` to notify us that there is new stdout or stderr output
+            // for a debug session.
+            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
+            "/debug-script-output": function(req, res)
+            {
+            	var data = "";
+            	req.addListener("data", function(chunk)
+            	{
+            		data += chunk;
+            	});
+            	req.addListener("end", function()
+            	{
+                	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
+
+					var session = proxyServer.sessionForID(qs.sessionID);
+					
+					if (session.runtimeOptions["show-" + qs.type])
+					{
+						session.emit("event", {type: qs.type, data: data});
+					}
+
+					res.end((session.runtimeOptions["show-" + qs.type]===true)?"1":"0");
+            	});
+            },
+
+            // Called by `../test/_helper.js` to notify us that a debug session has ended
+            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
+            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/8 (also needed so we don't exit until all output has been received)
+            "/debug-script-end": function(req, res)
+            {
+            	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
+            	
+				var session = proxyServer.sessionForID(qs.sessionID);
+				
+				session.status = "ended";
+				session.emit("end", {
+				    aborted: false		// Assume everything went ok
+				});
+
+				res.end("OK");
+            },
+
             // Run a browser client test. If no browser client connected
             // simulate a browser client by connecting one internally
             // for the duration of this test.

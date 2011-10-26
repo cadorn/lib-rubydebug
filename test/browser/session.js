@@ -43,20 +43,24 @@ define(function(require, exports, module)
         {
             session.on("end", function(status)
             {
-// NOTE: At the moment the session always aborts as we do not have an end session event
-// @issue https://github.com/JetBrains/ruby-debug-ide/issues/8
-//            	if (!status.aborted)
-//            	{
-                    client.disconnect();
-//            	}
+                client.disconnect();
             });
             
-/*            
-            // TODO: Watch stdout
-            // @issue https://github.com/JetBrains/ruby-debug-ide/issues/9
-*/
-        	// @see http://bashdb.sourceforge.net/ruby-debug.html#Continue
-        	session.sendCommand("cont");
+            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (currently implemented by watching script output)
+            session.sendCommand("set", ["stdout", "1"], null, function(args, data, raw)
+            {
+				ASSERT.equal(args[0], "stdout");
+				ASSERT.equal(args[1], "1");
+
+                session.sendCommand("set", ["stderr", "1"], null, function(args, data, raw)
+                {
+    				ASSERT.equal(args[0], "stderr");
+    				ASSERT.equal(args[1], "1");
+
+    	        	// @see http://bashdb.sourceforge.net/ruby-debug.html#Continue
+    	        	session.sendCommand("cont");
+                });
+            });
         });
 
         client.on("disconnect", function(data)
