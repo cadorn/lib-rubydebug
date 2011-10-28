@@ -61,10 +61,12 @@ var SYS = require("sys"),
     NET = require("net"),
     TIMERS = require("timers"),
     XML2JS = require("xml2js"),
-	HELPER = require("../test/_helper");
+	HELPER = require("../test/_helper"),
+	RUNNER = require("../lib/runner");
 
 
-var proxyServer = null,
+var runnerServer = null,
+	proxyServer = null,
     browserTestClients = [],
     browserTestIndex = 0,
     runningBrowserTests = {};
@@ -110,87 +112,10 @@ function startServer(options)
                 res.end("OK");
             },
 
-            // Called by `../test/_helper.js` to notify us that a new `rdebug-ide` instance
-            // is ready to be connected to.
-            "/debug-script-start": function(req, res)
+            // Called by RUNNER.Client in `../test/_helper.js`
+            "/lib-rubydebug/runner/debug-script-.*": function(req, res)
             {
-            	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
-
-            	var client = new CLIENT.Client({
-    		    	verbose: options.verbose,
-    		    	debug: options.debug,
-    		        API: {
-    		            TIMERS: TIMERS,
-    		            NET: NET,
-    		            XML2JS: XML2JS
-    		        },
-    		        connectTimeout: 2000,
-    		        debugHost: "localhost",
-    		        debugPort: qs.port,
-    		        sessionName: qs.sessionName
-    		    });
-            	
-            	var connected = false;
-
-            	client.on("session", function(session)
-            	{
-            		if(session.name === qs.sessionName)
-            		{
-	            		connected = true;
-	                    res.end(session.id);
-            		}
-            	});
-
-                proxyServer.listen(client);
-                
-            	// If connection not successful within about three seconds we return failure.
-                TIMERS.setTimeout(function()
-                {
-                	if (!connected)
-                		res.end("FAIL");
-                }, 3250);
-            },
-
-            // Called by `../test/_helper.js` to notify us that there is new stdout or stderr output
-            // for a debug session.
-            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
-            "/debug-script-output": function(req, res)
-            {
-            	var data = "";
-            	req.addListener("data", function(chunk)
-            	{
-            		data += chunk;
-            	});
-            	req.addListener("end", function()
-            	{
-                	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
-
-					var session = proxyServer.sessionForID(qs.sessionID);
-					
-					if (session.runtimeOptions["show-" + qs.type])
-					{
-						session.emit("event", {type: qs.type, data: data});
-					}
-
-					res.end((session.runtimeOptions["show-" + qs.type]===true)?"1":"0");
-            	});
-            },
-
-            // Called by `../test/_helper.js` to notify us that a debug session has ended
-            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
-            // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/8 (also needed so we don't exit until all output has been received)
-            "/debug-script-end": function(req, res)
-            {
-            	var qs = QS.parse(req.url.replace(/^[^\?]*\?/, ""));
-            	
-				var session = proxyServer.sessionForID(qs.sessionID);
-				
-				session.status = "ended";
-				session.emit("end", {
-				    aborted: false		// Assume everything went ok
-				});
-
-				res.end("OK");
+            	runnerServer.handleRequest(req, res);
             },
 
             // Run a browser client test. If no browser client connected
@@ -261,7 +186,13 @@ function startServer(options)
     	}
     });
 
-    
+    // Initialize the ruby-debug-ide client runner server component
+	runnerServer = new RUNNER.Server({
+		proxyServer: proxyServer,
+		verbose: options.verbose,
+    	debug: options.debug
+    });
+
     // Hook in browser test system
     io.of("/test").on("connection", function(socket)
     {

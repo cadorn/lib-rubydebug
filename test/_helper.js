@@ -56,14 +56,13 @@ var CLI = require("cli"),
     HTTP = require("http"),
     PATH = require("path"),
     EXEC = require("child_process").exec,
-    SPAWN = require("child_process").spawn,
     SYS = require("sys"),
     UTIL = require('util'),
     ASSERT = require("assert"),
     SOCKET_IO_CLIENT = require("socket.io-client"),
     XML2JS = require("xml2js"),
     NET = require("net"),
-    TIMERS = require("timers");
+    RUNNER = require("../lib/runner");
 
 
 var serverInfo = {},
@@ -110,137 +109,15 @@ exports.getClientOptions = function()
 
 exports.debugScript = function(name, sessionName, proxyPort)
 {
-	var sessionID = null;
-	var shouldSendOutput = {
-			"stdout": true,
-			"stderr": true
-		};
-
-	function sendOutput(type, data)
-	{
-		if (!shouldSendOutput[type])
-			return;
-
-		// TODO: Buffer output?
-
-        // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (need output events to get rid of this)
-		var req = HTTP.request({
-			  host: "localhost",
-			  port: proxyPort || serverInfo.port,
-			  path: "/debug-script-output?sessionID=" + sessionID + "&type=" + type,
-			  method: "POST"
-		}, function(res)
-		{
-			res.on("data", function(chunk)
-			{
-				// If server responds with "0" then output should not be sent for this session
-				if ((""+chunk) === "0")
-				{
-					shouldSendOutput[type] = false;
-				}
-			});
-		});
-		req.on('error', function(e) {
-		    console.error("Error '" + e.message + "' posting to: " + "http://localhost:" + (proxyPort || serverInfo.port) + "/debug-script-output?...");
-		});
-		req.write(data);
-		req.end();
-	}
-
-	// Debug a ruby script using `rdebug-ide` (https://github.com/ruby-debug/ruby-debug-ide)
-	// Once `rdebug-ide` is initialized we need to connect to it.
-	// NOTE: A free (unused) port should be selected here in order to run multiple debug sessions in parallel.
-	//		 We use a static port here as all our tests are executed sequentially.
-	var port = DEBUG_PORT;
-
-	var child = SPAWN("rdebug-ide", [
-	    "--stop",	// NOTE: Must start with `--stop`!
-	    "--port", port,
-	    "--",
-	    PATH.dirname(PATH.dirname(module.id)) + "/ruby/scripts/" + name + ".rb"
-    ]);
-
-	child.stdout.on("data", function(data)
-	{
-		sendOutput("stdout", data);
-		if (serverInfo.verbose)
-		    console.log("[debugScript][stdout] " + data);
-	});
-
-	child.stderr.on("data", function(data)
-	{
-		// Ignore debugger signature
-		if (/^\s*Fast Debugger \(ruby-debug-ide/.test(data))
-			return;
-		sendOutput("stderr", data);
-		if (serverInfo.verbose)
-			console.log("[debugScript][stderr] " + data);
-	});
-
-	child.on("exit", function (code)
-	{
-		child = null;
-		
-		// Notify proxy server that debug session has ended
-		// @issue https://github.com/ruby-debug/ruby-debug-ide/issues/8 (need session end notification event to get rid of this)
-        // @issue https://github.com/ruby-debug/ruby-debug-ide/issues/9 (also need output events to get rid of this)
-		var req = HTTP.request({
-			  host: "localhost",
-			  port: proxyPort || serverInfo.port,
-			  path: "/debug-script-end?sessionID=" + sessionID,
-			  method: "POST"
-		}, function(res)
-		{
-			// we assume event was sent
-		});
-		req.on('error', function(e) {
-		    console.error("Error '" + e.message + "' posting to: " + "http://localhost:" + (proxyPort || serverInfo.port) + "/debug-script-end?...");
-		});
-		req.end();		
-	});
-
-	function killSession()
-	{
-		if (child===null) return;
-		console.log("[debugScript] Kill session '" + sessionName + "' due to non-connection by proxy server!");
-		child.kill();
-	}
-
-	var connected = false;
-
-	// Notify proxy server of new `rdebug-ide` instance so it can connect to it.
-	var req = HTTP.request({
-		  host: "localhost",
-		  port: proxyPort || serverInfo.port,
-		  path: "/debug-script-start?port=" + port + "&sessionName=" + sessionName,
-		  method: "POST"		
-	}, function(res)
-	{
-		res.on("data", function(chunk)
-		{
-			if ((""+chunk) == "FAIL")
-			{
-				// proxy server failed to connect
-			}
-			else
-			{
-				// proxy server has connected
-				connected = true;
-				sessionID = ""+chunk;
-			}
-		});
-	});
-	req.on('error', function(e) {
-	    console.error("Error '" + e.message + "' posting to: " + "http://localhost:" + (proxyPort || serverInfo.port) + "/debug-script?...");
-	});
-	req.end();
-	
-	// If the proxy server has not connected within about three seconds we kill the session
-	TIMERS.setTimeout(function()
-	{
-		if (!connected)
-			killSession();
-	}, 3500);
+	new RUNNER.Client({
+		sessionName: sessionName,
+		proxyPort: proxyPort || serverInfo.port,
+		scriptPath: PATH.dirname(PATH.dirname(module.id)) + "/ruby/scripts/" + name + ".rb",
+    	// NOTE: A free (unused) port should be selected here in order to run multiple debug sessions in parallel.
+    	//		 We use a static port here as all our tests are executed sequentially.
+    	debugPort: DEBUG_PORT,
+    	verbose: serverInfo.verbose
+	}).run();
 }
 
 exports.ready = function(callback)
