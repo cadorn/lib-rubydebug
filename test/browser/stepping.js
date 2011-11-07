@@ -27,23 +27,16 @@
  * 
  */
 
-var HELPER = require("./_helper"),
-    ASYNC = require("../support/asyncjs/index"),
-    ASSERT = require("assert"),
-    CLIENT = require("../lib/client");
-
-var Test =
+define(function(require, exports, module)
 {
-    name: "async",
-    timeout: HELPER.getTestTimeout(),
-    
-    "test serverStepping": function(next)
+
+    exports.run = function(ASSERT, CLIENT, options, callback)
     {
-        var client = new CLIENT.Client(HELPER.getClientOptions());
+        var client = new CLIENT.Client(options);
 
         client.on("connect", function(data)
         {
-        	HELPER.debugScript("Simple", "stepping-server");
+        	options.helpers.debugScript("Simple", "stepping-browser");
         });
 
         client.on("session", function(session)
@@ -169,32 +162,12 @@ var Test =
 
         client.on("disconnect", function(data)
         {
-        	next();
+        	callback(true);
         });
 
         client.connect({
-        	id: "client-server-stepping"
-        });
-    },
+        	id: "client-browser-stepping"
+        });        
+    }
 
-	"test browserStepping": function(next)
-	{
-	    HELPER.runBrowserTest("stepping", function() {
-	        next();
-	    });
-	}
-
-}
-
-module.exports = require("../support/asyncjs/lib/test").testcase(Test);
-
-if (module === require.main)
-    HELPER.ready(function() {
-        module.exports.run().report().summary(function(err, passed)
-        {
-        	HELPER.done(function()
-	    	{
-	    		process.exit(!err && passed ? 0 : 1);
-	    	});
-	    });
-    });
+});
