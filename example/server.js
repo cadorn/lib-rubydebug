@@ -160,8 +160,8 @@ function startServer(options)
     io.set("log level", 0);
     if (options.verbose)
         io.set("log level", 2);
-    if (options.debug)
-        io.set("log level", 3);
+//    if (options.debug)
+//        io.set("log level", 3);
 
     // Initialize and hook in the debug proxy server so it can
     // communicate via `socket.io`.
