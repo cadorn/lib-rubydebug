@@ -42,7 +42,9 @@ HELPER.ready(function()
 {
     ASYNC.concat(
         require("./connection"),
-        require("./session")
+        require("./session"),
+        require("./stepping"),
+        require("./failures")
     ).run().report().summary(function(err, passed)
     {
     	HELPER.done(function()

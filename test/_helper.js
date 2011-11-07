@@ -67,7 +67,8 @@ var CLI = require("cli"),
 
 var serverInfo = {},
 	serverChildInstance = null,
-    ourServer = false;  // if we started the debug proxy server
+    ourServer = false,  // if we started the debug proxy server
+    clientRunners = [];
 
 
 exports.getTestTimeout = function(extra)
@@ -109,15 +110,30 @@ exports.getClientOptions = function()
 
 exports.debugScript = function(name, sessionName, proxyPort)
 {
-	new RUNNER.Client({
+	var client = new RUNNER.Client({
 		sessionName: sessionName,
 		proxyPort: proxyPort || serverInfo.port,
 		scriptPath: PATH.dirname(PATH.dirname(module.id)) + "/ruby/scripts/" + name + ".rb",
     	// NOTE: A free (unused) port should be selected here in order to run multiple debug sessions in parallel.
     	//		 We use a static port here as all our tests are executed sequentially.
     	debugPort: DEBUG_PORT,
-    	verbose: serverInfo.verbose
-	}).run();
+    	verbose: serverInfo.verbose,
+    	debug: serverInfo.debug
+	});
+
+	clientRunners.push(client);
+
+	client.on("end", function()
+	{
+		clientRunners.splice(clientRunners.indexOf(client), 1);
+	});
+
+	setTimeout(function()
+	{
+		client.run();
+	}, 100);
+
+	return client;
 }
 
 exports.ready = function(callback)
@@ -125,6 +141,7 @@ exports.ready = function(callback)
     // See: https://github.com/chriso/cli/blob/master/examples/static.js
     CLI.parse({
         verbose:  ["v", 'Log major events to console', 'boolean', false],
+        debug:  ["d", 'Log debug messages to console', 'boolean', false],
         port:  [false, 'Listen on this port', 'number', PROXY_PORT],
         'skip-browser-tests': [false, 'Skip browser tests?', 'boolean', false]
     });
@@ -147,7 +164,20 @@ exports.ready = function(callback)
 
 exports.done = function(callback)
 {
-	stopServer(callback);
+	if (clientRunners.length > 0)
+	{
+		var i = clientRunners.length-1;
+		for ( ; i >=0 ; i-- )
+		{
+			clientRunners[i].forceEnd();
+		}
+		setTimeout(function()
+		{
+			stopServer(callback);
+		}, 500);
+	}
+	else
+		stopServer(callback);
 }
 
 exports.fatalExit = function fatalExit(message)
@@ -217,6 +247,12 @@ function startServer()
     ourServer = true;
 
     var command = "node " +  PATH.normalize(__dirname + "/../example/server --test --port " + serverInfo.port);
+
+    if (serverInfo.verbose)
+    	command += " -v";
+
+    if (serverInfo.debug)
+    	command += " -d";
     
     console.log("Starting proxy server: " + command);
 
