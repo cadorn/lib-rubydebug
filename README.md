@@ -27,7 +27,7 @@ Requirements
   * [node.js](http://nodejs.org/) & *npm*
   * Ruby 1.8
   * `gem install ruby-debug` >= 0.4.16
-  * [http://github.com/cadorn/ruby-debug-ide](http://github.com/cadorn/ruby-debug-ide)
+  * `ruby-debug-ide` from [http://github.com/cadorn/ruby-debug-ide](http://github.com/cadorn/ruby-debug-ide)
 
 Installing `ruby-debug-ide` from [http://github.com/cadorn/ruby-debug-ide](http://github.com/cadorn/ruby-debug-ide):
 
