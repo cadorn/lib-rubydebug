@@ -44,6 +44,7 @@ HELPER.ready(function()
         require("./connection"),
         require("./session"),
         require("./stepping"),
+        require("./breakpoints"),
         require("./failures")
     ).run().report().summary(function(err, passed)
     {
