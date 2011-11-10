@@ -34,7 +34,7 @@ Installing `ruby-debug-ide` from [http://github.com/cadorn/ruby-debug-ide](http:
     gem install bundle
     gem install test-unit
     gem install ruby-debug-base
-    gem install ruby-debug-base19x
+    gem install ruby-debug-base19x  // Ignore for Ruby 1.8
     git clone git://github.com/cadorn/ruby-debug-ide.git
     cd ruby-debug-ide
     bundle update
@@ -76,6 +76,29 @@ Demo
 Open the example client at `http://localhost:9080/` (served from the debug proxy server).
 
 You can now use the client to run the test suite using the `Run All Tests` link.
+
+
+TODO
+====
+
+**High**
+
+  * Variable inspection - https://github.com/ruby-debug/ruby-debug-ide/issues/13
+
+**Medium**
+
+  * List breakpoints fix - https://github.com/ruby-debug/ruby-debug-ide/pull/14 (pull-request in place)
+  * Test with Ruby 1.9
+  * Command flooding support for all command combinations (may need protocol improvements to do this for all commands)
+
+**Low**
+
+  * Improve rdebug-ide protocol to separate each command response and pass through a command ID to
+    match command requests to command responses.
+  * Make ruby-debug-ide commands consistent with rdebug commands
+  * End session event - https://github.com/ruby-debug/ruby-debug-ide/issues/8 (workaround in place)
+  * Script output - https://github.com/ruby-debug/ruby-debug-ide/issues/9 (workaround in place)
+  * Use same test cases on server and client (need test framework that works on server and browser)
 
 
 Author
