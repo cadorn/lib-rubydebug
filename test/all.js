@@ -45,7 +45,8 @@ HELPER.ready(function()
         require("./session"),
         require("./stepping"),
         require("./breakpoints"),
-        require("./failures")
+        require("./failures"),
+        require("./command-flood")
     ).run().report().summary(function(err, passed)
     {
     	HELPER.done(function()
