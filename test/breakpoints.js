@@ -101,7 +101,7 @@ var Test =
             	        	session.sendCommand("cont");
 	    	            });
 
-        	            bIndex++;
+        	            bIndex += 1;
                 	}
                 	else
                 	if (bIndex === 1)
@@ -111,7 +111,7 @@ var Test =
         				// Continue to end of script
         	        	session.sendCommand("cont");
                 		
-        				bIndex++;
+        				bIndex += 1;
                 	}
                 }
             });

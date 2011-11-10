@@ -112,7 +112,7 @@ var Test =
     				ASSERT.equal(args[1].value, "val2");
     				ASSERT.equal(args[1].hasChildren, "false");
 
-    				// TODO: How do you drill down into the hash (var1)?
+    				// TODO: How do you drill down into the hash (var1)? See: https://github.com/ruby-debug/ruby-debug-ide/issues/13
     				
     				next3();
                 });
